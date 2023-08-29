@@ -105,7 +105,7 @@ class AdabinsHead(DenseDepthHead):
     Args:
         n_bins (int): The number of bins used in cls.-reg. Default: 256.
         patch_size (int): The number of patches in mini-ViT. Default: 16.
-        loss_chamfer (dict): charmfer loss for supervision on bins.
+        # loss_chamfer (dict): charmfer loss for supervision on bins.
             Default: dict(type='BinsChamferLoss').
     """
 
@@ -113,10 +113,12 @@ class AdabinsHead(DenseDepthHead):
                  n_bins=256,
                  patch_size=16,
                  loss_chamfer=dict(type='BinsChamferLoss', loss_weight=0.1),
+                 loss_hdn=dict(type='HDNLoss', loss_weight=1, level=3),
                  **kwargs):
         super(AdabinsHead, self).__init__(**kwargs)
 
-        self.loss_chamfer = build_loss(loss_chamfer)
+        # self.loss_chamfer = build_loss(loss_chamfer)
+        self.loss_hdn = build_loss(loss_hdn)
 
         self.conv_list = nn.ModuleList()
         up_channel_temp = 0
@@ -190,7 +192,7 @@ class AdabinsHead(DenseDepthHead):
         return output, bin_edges
 
 
-    def forward_train(self, img, inputs, img_metas, depth_gt, train_cfg):
+    def forward_train(self, img, inputs, img_metas, depth_gt, train_cfg, sam):
         depth_pred, bin_edges = self.forward(inputs, img_metas)
         depth_pred = resize(
             input=depth_pred,
@@ -201,7 +203,8 @@ class AdabinsHead(DenseDepthHead):
 
         losses = dict()
         losses["loss_depth"] = self.loss_decode(depth_pred, depth_gt)
-        losses["loss_chamfer"] = self.loss_chamfer(bin_edges, depth_gt)
+        losses["loss_hdn"] = self.loss_hdn(depth_pred, depth_gt, sam)
+        # losses["loss_chamfer"] = self.loss_chamfer(bin_edges, depth_gt)
 
         log_imgs = self.log_images(img[0], depth_pred[0], depth_gt[0], img_metas[0])
         losses.update(**log_imgs)

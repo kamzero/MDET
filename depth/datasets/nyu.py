@@ -105,16 +105,17 @@ class NYUDataset(Dataset):
         """
         self.invalid_depth_num = 0
         img_infos = []
+        import json
         if split is not None:
             with open(split) as f:
-                for line in f:
+                annos = json.load(f)
+                for line in annos['files'][0]:
                     img_info = dict()
-                    depth_map = line.strip().split(" ")[1]
-                    if depth_map == 'None':
-                        self.invalid_depth_num += 1
-                        continue
+                    depth_map = line['depth']
+                    # TODO: add semseg map
                     img_info['ann'] = dict(depth_map=osp.join(data_root, remove_leading_slash(depth_map)))
-                    img_name = line.strip().split(" ")[0]
+                    img_info['sam'] = dict(sam_mask=osp.join(data_root, remove_leading_slash(line['sam_mask'])))
+                    img_name = line['rgb']
                     img_info['filename'] = osp.join(data_root, remove_leading_slash(img_name))
                     img_infos.append(img_info)
         else:
@@ -124,6 +125,38 @@ class NYUDataset(Dataset):
         img_infos = sorted(img_infos, key=lambda x: x['filename'])
         print_log(f'Loaded {len(img_infos)} images. Totally {self.invalid_depth_num} invalid pairs are filtered', logger=get_root_logger())
         return img_infos
+
+    # def load_annotations(self, data_root, split):
+    #     """Load annotation from directory.
+    #     Args:
+    #         data_root (str): Data root for img_dir/ann_dir.
+    #         split (str|None): Split txt file. If split is specified, only file
+    #             with suffix in the splits will be loaded. Otherwise, all images
+    #             in img_dir/ann_dir will be loaded. Default: None
+    #     Returns:
+    #         list[dict]: All image info of dataset.
+    #     """
+    #     self.invalid_depth_num = 0
+    #     img_infos = []
+    #     if split is not None:
+    #         with open(split) as f:
+    #             for line in f:
+    #                 img_info = dict()
+    #                 depth_map = line.strip().split(" ")[1]
+    #                 if depth_map == 'None':
+    #                     self.invalid_depth_num += 1
+    #                     continue
+    #                 img_info['ann'] = dict(depth_map=osp.join(data_root, remove_leading_slash(depth_map)))
+    #                 img_name = line.strip().split(" ")[0]
+    #                 img_info['filename'] = osp.join(data_root, remove_leading_slash(img_name))
+    #                 img_infos.append(img_info)
+    #     else:
+    #         raise NotImplementedError 
+
+    #     # github issue:: make sure the same order
+    #     img_infos = sorted(img_infos, key=lambda x: x['filename'])
+    #     print_log(f'Loaded {len(img_infos)} images. Totally {self.invalid_depth_num} invalid pairs are filtered', logger=get_root_logger())
+    #     return img_infos
     
     def get_ann_info(self, idx):
         """Get annotation by index.
@@ -134,6 +167,9 @@ class NYUDataset(Dataset):
         """
 
         return self.img_infos[idx]['ann']
+
+    def get_sam_info(self, idx):
+        return self.img_infos[idx]['sam']
 
     def pre_pipeline(self, results):
         """Prepare results dict for pipeline."""
@@ -171,7 +207,8 @@ class NYUDataset(Dataset):
 
         img_info = self.img_infos[idx]
         ann_info = self.get_ann_info(idx)
-        results = dict(img_info=img_info, ann_info=ann_info)
+        sam_info = self.get_sam_info(idx)
+        results = dict(img_info=img_info, ann_info=ann_info, sam_info=sam_info)
         self.pre_pipeline(results)
         return self.pipeline(results)
 

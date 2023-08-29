@@ -39,6 +39,35 @@ class LoadKITTICamIntrinsic(object):
 
 
 @PIPELINES.register_module()
+class SAMLoadAnnotations(object):
+    def __init__(self, ltype='sam-o', nums=25):
+        self.ltype = ltype
+        self.nums = nums
+
+    def __call__(self, results):
+        filename = results['sam_info']['sam_mask']
+
+        sam = np.load(filename, allow_pickle=True)['masks']
+        areas = np.array([item['area'] for item in sam])
+        weights = areas / areas.sum()
+        index = np.random.choice(len(sam), self.nums, p=weights)
+
+        if len(sam) >= self.nums: 
+            sam = sam[index]
+            sam = np.array([item['segmentation'] for item in sam])
+        else:
+            remainder = self.nums - len(sam)
+            sam = np.array([item['segmentation'] for item in sam])
+            reminder = np.zeros((remainder, *sam.shape[1:]), dtype=np.bool)
+            sam = np.concatenate([sam, reminder], axis=0)
+        results['sam'] = np.transpose(sam, (1, 2, 0))
+        return results
+
+    def __repr__(self):
+        repr_str = self.__class__.__name__
+        return repr_str
+
+@PIPELINES.register_module()
 class DepthLoadAnnotations(object):
     """Load annotations for depth estimation.
 

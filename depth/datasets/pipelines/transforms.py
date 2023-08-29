@@ -57,8 +57,9 @@ class NYUCrop(object):
     Args:
         depth (bool): Whether apply NYUCrop on depth map. Default: False.
     """
-    def __init__(self, depth=False):
+    def __init__(self, depth=False, sam=False):
         self.depth = depth
+        self.sam = sam
 
     def __call__(self, results):
         """Call function to apply NYUCrop on images.
@@ -74,6 +75,10 @@ class NYUCrop(object):
             depth_cropped = results["depth_gt"][45:472, 43:608]
             results["depth_gt"] = depth_cropped
             results["depth_shape"] = results["depth_gt"].shape
+
+        if self.sam:
+            sam_cropped = results["sam"][45:472, 43:608,:]
+            results["sam"] = sam_cropped
 
         img_cropped = results["img"][45:472, 43:608, :]
         results["img"] = img_cropped
@@ -203,6 +208,20 @@ class RandomRotate(object):
                     center=self.center,
                     auto_bound=self.auto_bound,
                     interpolation='nearest')
+            
+            if 'sam' in results.keys():
+                channels = [results['sam'][:, :, i].astype(np.uint8) for i in range(results['sam'].shape[2])]
+                rotated_channels = [
+                    mmcv.imrotate(
+                        channel,
+                        angle=degree,
+                        border_value=self.depth_pad_val,
+                        center=self.center,
+                        auto_bound=self.auto_bound,
+                        interpolation='nearest'
+                    ) for channel in channels
+                ]
+                results['sam'] = np.stack(rotated_channels, axis=-1).astype(np.bool)
 
         return results
 
@@ -265,7 +284,15 @@ class RandomFlip(object):
                 # use copy() to make numpy stride positive
                 results[key] = mmcv.imflip(
                     results[key], direction=results['flip_direction']).copy()
-
+            #TODO
+            if 'sam' in results.keys():
+                channels = [results['sam'][:, :, i] for i in range(results['sam'].shape[2])]
+                rotated_channels = [
+                    mmcv.imflip(
+                        channel, direction=results['flip_direction']).copy()
+                    for channel in channels
+                ]
+                results['sam'] = np.stack(rotated_channels, axis=-1)
         return results
 
     def __repr__(self):
@@ -326,6 +353,7 @@ class RandomCrop(object):
             
         results["depth_shape"] = img_shape
 
+        results['sam'] = self.crop(results['sam'], crop_bbox)
         return results
 
     def __repr__(self):
